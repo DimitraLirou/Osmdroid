@@ -6,15 +6,23 @@ import android.Manifest;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.DiscretePathEffect;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Location;
 import android.location.LocationListener;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Debug;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.Display;
+import android.view.MotionEvent;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -34,6 +42,7 @@ import org.osmdroid.bonuspack.routing.RoadManager;
 import org.osmdroid.bonuspack.routing.RoadNode;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.events.MapEventsReceiver;
+import org.osmdroid.gpkg.overlay.features.MarkerOptions;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.BoundingBox;
 import org.osmdroid.util.GeoPoint;
@@ -43,10 +52,17 @@ import org.osmdroid.views.overlay.ItemizedIconOverlay;
 import org.osmdroid.views.overlay.ItemizedOverlayWithFocus;
 import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Marker;
+import org.osmdroid.views.overlay.MinimapOverlay;
 import org.osmdroid.views.overlay.Overlay;
 import org.osmdroid.views.overlay.OverlayItem;
 import org.osmdroid.views.overlay.Polygon;
+import org.osmdroid.views.overlay.ScaleBarOverlay;
+import org.osmdroid.views.overlay.compass.CompassOverlay;
+import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider;
+import org.osmdroid.views.overlay.gridlines.LatLonGridlineOverlay2;
 import org.osmdroid.views.overlay.infowindow.InfoWindow;
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider;
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay;
 
 import java.util.ArrayList;
 
@@ -55,10 +71,13 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String MY_USER_AGENT = null;
     private final int REQUEST_PERMISSIONS_REQUEST_CODE = 1;
+    private MyLocationNewOverlay myLocationNewOverlay;
     private MapView map;
     private Object GeoPoint;
     Polyline polyline;
     ArrayList<OverlayItem> anotherOverlayItemArray;
+
+
 
 
     @Override
@@ -75,6 +94,72 @@ public class MainActivity extends AppCompatActivity {
         map = findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK); //render
         map.setMultiTouchControls(true);
+        Marker marker = new Marker(map);
+        IMapController controller = map.getController();
+        map.setMultiTouchControls(true);
+        map.setTilesScaledToDpi(true);
+
+        myLocationNewOverlay = new MyLocationNewOverlay(new GpsMyLocationProvider(this), map);
+        myLocationNewOverlay.enableMyLocation();
+        Bitmap bitmap = BitmapFactory.decodeResource(this.getResources(), org.osmdroid.wms.R.drawable.ic_menu_mylocation);
+        myLocationNewOverlay.setDirectionArrow(bitmap, bitmap);
+        map.getOverlays().add(myLocationNewOverlay);
+        myLocationNewOverlay.enableFollowLocation();
+
+        Display defaultDisplay = getWindowManager().getDefaultDisplay();
+        MinimapOverlay minimapOverlay = new MinimapOverlay(this, map.getTileRequestCompleteHandler());
+        minimapOverlay.setWidth(defaultDisplay.getWidth() / 5 );
+        minimapOverlay.setHeight(defaultDisplay.getHeight() / 5);
+        map.getOverlays().add(minimapOverlay);
+
+        ScaleBarOverlay scaleBarOverlay = new ScaleBarOverlay(map);
+        scaleBarOverlay.setCentred(true);
+        scaleBarOverlay.setScaleBarOffset(defaultDisplay.getWidth()/ 2, 10);
+        map.getOverlays().add(scaleBarOverlay);
+
+
+
+
+        final MapEventsReceiver mapEventsReceiver = new MapEventsReceiver() {
+
+            @Override
+            public boolean singleTapConfirmedHelper(org.osmdroid.util.GeoPoint p) {
+                Toast.makeText(getBaseContext(),p.getLatitude() + "-"+p.getLongitude(),Toast.LENGTH_SHORT).show();
+                return false;
+            }
+
+            @Override
+            public boolean longPressHelper(org.osmdroid.util.GeoPoint p) {
+                addMarker(p);
+
+                return true;
+            }
+        };
+
+        map.getOverlays().add(new MapEventsOverlay(mapEventsReceiver));
+        MapEventsOverlay mapEventsOverlay = new MapEventsOverlay(mapEventsReceiver);
+
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.FROYO){
+            CompassOverlay compassOverlay = new CompassOverlay(this, new InternalCompassOrientationProvider(this),map);
+            compassOverlay.enableCompass();
+            map.getOverlays().add(compassOverlay);
+        }
+
+
+        //οθόνη πλέγματος γεωγραφικού πλάτους και μήκους
+
+        LatLonGridlineOverlay2 latLonGridlineOverlay2 = new LatLonGridlineOverlay2();
+        latLonGridlineOverlay2.setBackgroundColor(Color.BLACK);
+        latLonGridlineOverlay2.setFontColor(Color.RED);
+        latLonGridlineOverlay2.setLineColor(Color.RED);
+        latLonGridlineOverlay2.setFontSizeDp((short)14);
+        map.getOverlayManager().add(latLonGridlineOverlay2);
+
+        requestPermissionsIfNecessary(new String[]{
+                Manifest.permission.WRITE_EXTERNAL_STORAGE, // WRITE_EXTERNAL_STORAGE is required in order to show the map
+                Manifest.permission.ACCESS_FINE_LOCATION
+        });
+
 
         GeoPoint AgrinioPoint = new GeoPoint(38.6272443930541, 21.418050853391883);
         GeoPoint PatrasPoint = new GeoPoint(38.29042025855486, 21.79600110957484);
@@ -88,14 +173,14 @@ public class MainActivity extends AppCompatActivity {
         mapController.setCenter(PatrasPoint);
         mapController.setZoom(10.0);
 
-        Marker startMarker = new Marker(map);
-        startMarker.setPosition(AgrinioPoint);
-        startMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
-        map.getOverlays().add(startMarker);
+
+        marker.setPosition(AgrinioPoint);
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
+        map.getOverlays().add(marker);
         map.invalidate();
 
-        startMarker.setIcon(getResources().getDrawable(R.drawable.ic_launcher));
-        startMarker.setTitle("Start point");
+        marker.setIcon(getResources().getDrawable(R.drawable.ic_launcher));
+        marker.setTitle("Start point");
 
         RoadManager roadManager = new OSRMRoadManager(this, MY_USER_AGENT);
         ArrayList<GeoPoint> waypoints = new ArrayList<GeoPoint>();
@@ -146,10 +231,6 @@ public class MainActivity extends AppCompatActivity {
         map.getOverlays().add(mOverlay);
 
 
-        requestPermissionsIfNecessary(new String[]{
-                Manifest.permission.WRITE_EXTERNAL_STORAGE  // WRITE_EXTERNAL_STORAGE is required in order to show the map
-        });
-
     }
 
     @Override
@@ -190,6 +271,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+    protected void addMarker(GeoPoint p) {
+
+        Drawable dr =  getResources().getDrawable(R.drawable.ic_launcher);
+        Bitmap bitmap = ((BitmapDrawable) dr).getBitmap();
+        Drawable d = new BitmapDrawable(getResources(), Bitmap.createScaledBitmap(bitmap, 100, 100, true));
+
+        Marker marker = new Marker(map);
+        marker.setPosition(p);
+        marker.setInfoWindow(null);
+        marker.setIcon(d);
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
+        map.getOverlays().add(marker);
+        map.invalidate();
+    }
+
     private void requestPermissionsIfNecessary(String[] permissions) {
         ArrayList<String> permissionsToRequest = new ArrayList<>();
         for (String permission : permissions) {
@@ -206,4 +303,10 @@ public class MainActivity extends AppCompatActivity {
                     REQUEST_PERMISSIONS_REQUEST_CODE);
         }
     }
+
+    @Override
+    public void onPointerCaptureChanged(boolean hasCapture) {
+        super.onPointerCaptureChanged(hasCapture);
+    }
 }
+
