@@ -274,14 +274,13 @@ public class MainActivity extends AppCompatActivity {
 
     protected void addMarker(GeoPoint p) {
 
-        Drawable dr =  getResources().getDrawable(R.drawable.ic_launcher);
-        Bitmap bitmap = ((BitmapDrawable) dr).getBitmap();
-        Drawable d = new BitmapDrawable(getResources(), Bitmap.createScaledBitmap(bitmap, 100, 100, true));
+
+
+     Drawable dr =  getResources().getDrawable(R.drawable.ic_launcher);
 
         Marker marker = new Marker(map);
         marker.setPosition(p);
         marker.setInfoWindow(null);
-        marker.setIcon(d);
         marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
         map.getOverlays().add(marker);
         map.invalidate();
